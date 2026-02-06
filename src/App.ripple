@@ -1,53 +1,60 @@
 import { track } from 'ripple';
 
 export component App() {
-	let count = track(0);
+	let text = track('');
+	let showWords = track(true);
 
-	<div class="min-h-screen flex justify-center items-center bg-gradient-to-br from-[#1a1c2b] to-[#0d0e17] text-[#f2f4f8] font-sans p-4">
-		<div class="bg-[rgba(18,19,29,0.75)] p-10 px-8 rounded-2xl text-center border border-white/10 backdrop-blur-md shadow-2xl max-w-md w-full">
-			<img src="../src/assets/ripple-logo-horizontal.png" alt="Ripple Logo" class="w-40 mb-4 mx-auto block" />
+	let wordCount = track(() => {
+		const trimmed = (@text).trim();
+		if (trimmed === '') return 0;
+		return trimmed.split(/\s+/).length;
+	});
 
-			<p class="text-[#b0b3c2] text-base mb-6 font-medium">{'The elegant TypeScript UI framework.'}</p>
+	let charCount = track(() => (@text).length);
 
-			<div class="flex items-center justify-center gap-4 my-6">
-				<button 
-					onClick={() => @count--}
-					class="bg-[rgba(58,58,72,0.9)] text-[#f2f4f8] text-lg border border-white/10 rounded-xl px-4 py-2 cursor-pointer hover:bg-[rgba(68,68,82,0.9)] transition-colors"
-				>
-					{'-'}
-				</button>
-				<span class="text-2xl font-medium text-[#f2f4f8] min-w-[2rem] inline-block text-center">{@count}</span>
-				<button 
-					onClick={() => @count++}
-					class="bg-[rgba(58,58,72,0.9)] text-[#f2f4f8] text-lg border border-white/10 rounded-xl px-4 py-2 cursor-pointer hover:bg-[rgba(68,68,82,0.9)] transition-colors"
-				>
-					{'+'}
-				</button>
-			</div>
+	let textareaRef: HTMLTextAreaElement | undefined;
 
-			<div class="flex justify-center gap-3 mt-6">
-				<a 
-					href="https://www.ripple-ts.com/" 
-					target="_blank" 
-					class="no-underline px-5 py-2 rounded-xl font-medium text-sm bg-[rgba(58,58,72,0.9)] text-[#f2f4f8] border border-white/10 hover:bg-[rgba(68,68,82,0.9)] transition-colors"
-				>
-					{'Docs'}
-				</a>
-				<a
-					href="https://github.com/Ripple-TS/ripple"
-					target="_blank"
-					class="no-underline px-5 py-2 rounded-xl font-medium text-sm bg-[rgba(58,58,72,0.9)] text-[#f2f4f8] border border-white/10 hover:bg-[rgba(68,68,82,0.9)] transition-colors"
-				>
-					{'GitHub'}
-				</a>
-			</div>
+	function handleInput(e: Event) {
+		const target = e.target as HTMLTextAreaElement;
+		@text = target.value;
+	}
 
-			<p class="mt-6 text-sm text-[#c8cbda]">{'This is a basic Ripple application template.'}</p>
-			<p class="mt-1 text-xs text-[#9fa3b9]">
-				{'Edit '}
-				<code class="bg-[rgba(31,32,46,0.9)] px-1.5 py-0.5 rounded font-mono text-[#a8b2ff] text-xs">{'src/App.ripple'}</code>
-				{' to get started.'}
-			</p>
-		</div>
+	function focusTextarea() {
+		textareaRef?.focus();
+	}
+
+	<div
+		class="min-h-screen flex flex-col items-center bg-zinc-900 pt-12 px-6 pb-8 cursor-text"
+		onClick={focusTextarea}
+	>
+		<h1 class="text-xs font-medium tracking-widest uppercase text-zinc-600 mb-12 select-none">
+			{'Word Counter'}
+		</h1>
+
+		<textarea
+			class="flex-1 w-full max-w-2xl bg-transparent border-none outline-none text-zinc-300 text-lg leading-relaxed font-[inherit] resize-none caret-blue-500 placeholder:text-zinc-700"
+			{ref (el: HTMLTextAreaElement) => {
+				textareaRef = el;
+			}}
+			onInput={handleInput}
+			placeholder="Start typing..."
+			spellcheck={true}
+		/>
+
+		<button
+			class="fixed bottom-8 bg-transparent border-none cursor-pointer px-4 py-2 text-zinc-600 text-sm font-[inherit] transition-colors duration-200 hover:text-zinc-500 select-none"
+			onClick={(e: MouseEvent) => {
+				e.stopPropagation();
+				@showWords = !@showWords;
+			}}
+		>
+			if (@showWords) {
+				<span class="text-blue-500 tabular-nums">{@wordCount}</span>
+				<span>{@wordCount === 1 ? ' word' : ' words'}</span>
+			} else {
+				<span class="text-blue-500 tabular-nums">{@charCount}</span>
+				<span>{@charCount === 1 ? ' character' : ' characters'}</span>
+			}
+		</button>
 	</div>
 }
