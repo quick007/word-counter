@@ -4,6 +4,10 @@
 
 This is a **RippleTS** application - a TypeScript-first UI framework. It uses Vite for building and supports the `.ripple` file format for components.
 
+## Important Notes:
+- Do not commit unless the user explciityly asks you to make that commit
+- This project uses bun, do not use any other package managers
+
 ## Build/Lint/Format Commands
 
 ```bash

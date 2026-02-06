@@ -1,6 +1,6 @@
 # Word Counter
 
-Minimal word counter app that I made because I was getting fed up with wordcounter.net enshittifying. 
+Minimalist word counter app that I made because I was getting fed up with wordcounter.net enshittifying. 
 
 ## Getting Started
 
