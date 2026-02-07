@@ -12,6 +12,9 @@ This is a **RippleTS** application - a TypeScript-first UI framework. It uses Vi
 - When modifying .ripple files, you must have read the ripple-ts skill at some point in the current conversation
 - Do not run tools calls in thinking
 
+Content textarea (or just textarea): the main textarea that users write in
+Prompt textarea: a special textarea that users can open via the ctrl k menu that appears above the content textarea and isn't tracked for word count
+
 ## Build/Lint/Format Commands
 
 ```bash
