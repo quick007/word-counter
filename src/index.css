@@ -76,6 +76,8 @@ textarea.editor-area::placeholder {
 ::-webkit-scrollbar-thumb {
 	background: var(--color-zinc-800);
 	border-radius: 2px;
+	border: 2px solid transparent;
+	background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
