@@ -125,7 +125,7 @@ export component App() {
 			<h1
 				class="text-sm font-medium tracking-wider text-zinc-600 select-none pb-2"
 			>
-				{'Simple Word Counter'}
+				{'Word Counter'}
 			</h1>
 
 		<div class="relative w-full max-w-3xl flex-1">
