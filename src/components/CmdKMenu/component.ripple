@@ -10,19 +10,24 @@ import { ArrowsRightLeft } from '../icons/ArrowsRightLeft.ripple';
 import { ClipboardDocument } from '../icons/ClipboardDocument.ripple';
 import { Document } from '../icons/Document.ripple';
 import { Trash } from '../icons/Trash.ripple';
+import { CommandLine } from '../icons/CommandLine.ripple';
 
 export interface CmdKMenuProps {
-	isOpen: boolean;
-	onClose: () => void;
-	stashes: StashItem[];
-	onStash: () => void;
-	onStashPop: () => void;
-	onStashRestore: (stash: StashItem) => void;
-	onStashDelete: (id: string) => void;
-	onToggleCount: () => void;
-	onCopy: () => void;
-	showWords: boolean;
-	hasText: boolean;
+  isOpen: boolean;
+  onClose: () => void;
+  stashes: StashItem[];
+  onStash: () => void;
+  onStashPop: () => void;
+  onStashRestore: (stash: StashItem) => void;
+  onStashDelete: (id: string) => void;
+  onToggleCount: () => void;
+  onCopy: () => void;
+  onAddPrompt: () => void;
+  onRemovePrompt: () => void;
+  onClear: () => void;
+  showWords: boolean;
+  hasText: boolean;
+  showPrompt: boolean;
 }
 
 const ITEM_HEIGHT = 48; // Height of each command item in pixels
@@ -50,8 +55,9 @@ export component CmdKMenu(props: CmdKMenuProps) {
 		}, 300);
 	}
 
-	let mainCommands = track<CommandItem[]>(
-		() => [
+let mainCommands = track<CommandItem[]>(
+	() => {
+		const commands: CommandItem[] = [
 			{
 				id: 'stash',
 				label: 'Stash text',
@@ -99,21 +105,60 @@ export component CmdKMenu(props: CmdKMenuProps) {
 					}, 50);
 				},
 			},
-			{
-				id: 'copy',
-				label: 'Copy all content',
-				icon: 'copy',
-				keywords: ['copy', 'clipboard', 'all', 'text'],
-				shortcut: 'Ctrl+Shift+C',
+      {
+        id: 'copy',
+        label: 'Copy all content',
+        icon: 'copy',
+        keywords: ['copy', 'clipboard', 'all', 'text'],
+        shortcut: 'Ctrl+Shift+C',
+        action: () => {
+          if (@props.hasText) {
+            @props.onCopy();
+            handleClose();
+          }
+        },
+      },
+      {
+        id: 'clear',
+        label: 'Clear text',
+        icon: 'trash',
+        keywords: ['clear', 'delete', 'empty', 'remove', 'reset'],
+        action: () => {
+          if (@props.hasText) {
+            @props.onClear();
+            handleClose();
+          }
+        },
+      },
+    ];
+
+		if (@props.showPrompt) {
+			commands.push({
+				id: 'remove-prompt',
+				label: 'Remove prompt',
+				icon: 'prompt',
+				keywords: ['prompt', 'remove', 'hide', 'close'],
 				action: () => {
-					if (@props.hasText) {
-						@props.onCopy();
-						handleClose();
-					}
+					@props.onRemovePrompt();
+					handleClose();
 				},
-			},
-		],
-	);
+			});
+		} else {
+			commands.push({
+				id: 'prompt',
+				label: 'Add a prompt',
+				icon: 'prompt',
+				keywords: ['prompt', 'add', 'textarea', 'input'],
+				action: () => {
+					@props.onAddPrompt();
+					handleClose();
+				},
+			});
+		}
+
+		return commands;
+	},
+);
 
 	let filteredCommands = track(() => {
 		if (@currentPage !== 'main') return [];
@@ -192,16 +237,18 @@ export component CmdKMenu(props: CmdKMenuProps) {
 		});
 	}
 
-	if (@props.isOpen) {
-		<div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
-			<div
-				class={{
-					'fixed inset-0 bg-black/50 transition-all duration-300 ease-out': true,
-					'opacity-100 backdrop-blur-sm': !@isClosing,
-					'opacity-0 backdrop-blur-none': @isClosing,
-				}}
-				onClick={handleClose}
-			/>
+  if (@props.isOpen) {
+    <div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+      if (@currentPage !== 'main' || @filteredCommands.length > 0) {
+        <div
+          class={{
+            'fixed inset-0 bg-black/50 transition-all duration-300 ease-out': true,
+            'opacity-100 backdrop-blur-sm': !@isClosing,
+            'opacity-0 backdrop-blur-none': @isClosing,
+          }}
+          onClick={handleClose}
+        />
+      }
 
 			<div
 				class={{
@@ -307,11 +354,19 @@ export component CmdKMenu(props: CmdKMenuProps) {
 											<ArrowsRightLeft
 												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
 											/>
-										} else if (cmd.icon === 'copy') {
-											<ClipboardDocument
-												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
-											/>
-										}
+				} else if (cmd.icon === 'copy') {
+							<ClipboardDocument
+								class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+							/>
+              } else if (cmd.icon === 'prompt') {
+                <CommandLine
+                  class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+                />
+              } else if (cmd.icon === 'trash') {
+                <Trash
+                  class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+                />
+              }
 										<span class="flex-1 text-sm">{cmd.label}</span>
 										if (cmd.shortcut) {
 											<Pill>
@@ -324,9 +379,12 @@ export component CmdKMenu(props: CmdKMenuProps) {
 										if (cmd.id === 'pop' && @props.stashes.length === 0) {
 											<span class="text-xs text-zinc-600">{'Empty'}</span>
 										}
-										if (cmd.id === 'copy' && !@props.hasText) {
-											<span class="text-xs text-zinc-600">{'No text'}</span>
-										}
+              if (cmd.id === 'copy' && !@props.hasText) {
+                <span class="text-xs text-zinc-600">{'No text'}</span>
+              }
+              if (cmd.id === 'clear' && !@props.hasText) {
+                <span class="text-xs text-zinc-600">{'No text'}</span>
+              }
 									</button>
 								}
 							</div>

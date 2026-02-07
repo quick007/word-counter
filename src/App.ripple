@@ -1,10 +1,17 @@
 import { track, effect } from 'ripple';
 import { CmdKMenu } from './components/CmdKMenu/component.ripple';
-import { loadStashes, addStash, removeStash, type StashItem } from './components/CmdKMenu/cmdk-utils.ts';
+import {
+	loadStashes,
+	addStash,
+	removeStash,
+	type StashItem,
+} from './components/CmdKMenu/cmdk-utils.ts';
 import { CommandLine } from './components/icons/CommandLine.ripple';
 import { GitHub } from './components/icons/GitHub.ripple';
 
 const STORAGE_KEY = 'wc-text';
+const PROMPT_KEY = 'wc-prompt';
+const PROMPT_VISIBLE_KEY = 'wc-prompt-visible';
 
 function loadText(): string {
 	return localStorage.getItem(STORAGE_KEY) ?? '';
@@ -14,16 +21,43 @@ function saveText(value: string) {
 	localStorage.setItem(STORAGE_KEY, value);
 }
 
+function loadPrompt(): string {
+	return localStorage.getItem(PROMPT_KEY) ?? '';
+}
+
+function savePrompt(value: string) {
+	localStorage.setItem(PROMPT_KEY, value);
+}
+
+function loadPromptVisible(): boolean {
+	return localStorage.getItem(PROMPT_VISIBLE_KEY) === 'true';
+}
+
+function savePromptVisible(value: boolean) {
+	localStorage.setItem(PROMPT_VISIBLE_KEY, value ? 'true' : 'false');
+}
+
 export component App() {
 	let text = track(loadText());
 	let showWords = track(true);
 	let isTyping = track(false);
 	let isFocused = track(false);
+	let isPromptFocused = track(false);
 	let hasSelection = track(false);
+	let isPromptTyping = track(false);
 	let caretX = track(0);
 	let caretY = track(0);
+	let textareaOffsetTop = track(0);
+	let promptCaretX = track(0);
+	let promptCaretY = track(0);
+	let promptMirrorRef: HTMLDivElement | undefined;
 	let stashes = track(loadStashes());
 	let cmdkOpen = track(false);
+	let showPrompt = track(loadPromptVisible());
+	let promptText = track(loadPrompt());
+	let hasMounted = track(false);
+	let promptTextareaRef: HTMLTextAreaElement | undefined;
+	let hasFontMetricsSync = false;
 
 	let wordCount = track(() => {
 		const trimmed = (@text).trim();
@@ -33,11 +67,13 @@ export component App() {
 
 	let charCount = track(() => (@text).length);
 
-	let caretVisible = track(() => @isFocused && !@hasSelection);
+	let caretVisible = track(() => @isFocused && !@hasSelection && !@isPromptFocused);
+	let promptCaretVisible = track(() => @isPromptFocused && !@hasSelection);
 
 	let textareaRef: HTMLTextAreaElement | undefined;
 	let mirrorRef: HTMLDivElement | undefined;
 	let typingTimeout: ReturnType<typeof setTimeout> | undefined;
+	let promptTypingTimeout: ReturnType<typeof setTimeout> | undefined;
 	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	function autoResize() {
@@ -45,6 +81,29 @@ export component App() {
 		if (!textarea) return;
 		textarea.style.height = 'auto';
 		textarea.style.height = textarea.scrollHeight + 'px';
+	}
+
+	function syncLayoutWithFonts() {
+		if (hasFontMetricsSync) return;
+		hasFontMetricsSync = true;
+		const fonts = document.fonts;
+		if (!fonts) {
+			autoResize();
+			measureCaret();
+			measurePromptCaret();
+			return;
+		}
+		fonts.ready.then(() => {
+			autoResize();
+			if (promptTextareaRef) {
+				promptTextareaRef.style.height = 'auto';
+				promptTextareaRef.style.height = promptTextareaRef.scrollHeight + 'px';
+			}
+			requestAnimationFrame(() => {
+				measureCaret();
+				measurePromptCaret();
+			});
+		});
 	}
 
 	function measureCaret() {
@@ -85,6 +144,46 @@ export component App() {
 
 		@caretX = markerRect.left - textareaRect.left;
 		@caretY = markerRect.top - textareaRect.top;
+	}
+
+	function measurePromptCaret() {
+		const textarea = promptTextareaRef;
+		const mirror = promptMirrorRef;
+		if (!textarea || !mirror) return;
+
+		const start = textarea.selectionStart ?? 0;
+		const end = textarea.selectionEnd ?? 0;
+		@hasSelection = start !== end;
+
+		if (start !== end) return;
+
+		const textBefore = textarea.value.substring(0, start);
+
+		const style = window.getComputedStyle(textarea);
+		mirror.style.font = style.font;
+		mirror.style.letterSpacing = style.letterSpacing;
+		mirror.style.wordSpacing = style.wordSpacing;
+		mirror.style.lineHeight = style.lineHeight;
+		mirror.style.paddingLeft = style.paddingLeft;
+		mirror.style.paddingRight = style.paddingRight;
+		mirror.style.paddingTop = style.paddingTop;
+		mirror.style.width = style.width;
+		mirror.style.whiteSpace = 'pre-wrap';
+		mirror.style.wordWrap = 'break-word';
+		mirror.style.overflowWrap = 'break-word';
+
+		mirror.innerHTML = '';
+		const textNode = document.createTextNode(textBefore);
+		const marker = document.createElement('span');
+		marker.textContent = '​';
+		mirror.appendChild(textNode);
+		mirror.appendChild(marker);
+
+		const markerRect = marker.getBoundingClientRect();
+		const textareaRect = textarea.getBoundingClientRect();
+
+		@promptCaretX = markerRect.left - textareaRect.left;
+		@promptCaretY = markerRect.top - textareaRect.top;
 	}
 
 	function handleInput(e: Event) {
@@ -167,6 +266,16 @@ export component App() {
 		saveText('');
 	}
 
+	function handleAddPrompt() {
+		@showPrompt = true;
+		savePromptVisible(true);
+	}
+
+	function handleRemovePrompt() {
+		@showPrompt = false;
+		savePromptVisible(false);
+	}
+
 	function handleStashPop() {
 		if (@stashes.length === 0) return;
 		const [first, ...rest] = @stashes;
@@ -189,10 +298,27 @@ export component App() {
 		saveText(stash.text);
 	}
 
+	function handleStashDelete(id: string) {
+		@stashes = removeStash(@stashes, id);
+	}
+
 	async function handleCopy() {
 		if (!@text.trim()) return;
 		// @ts-expect-error
 		await navigator.clipboard.writeText(@text);
+	}
+
+	function handleClear() {
+		@text = '';
+		@promptText = '';
+		@showPrompt = false;
+		if (textareaRef) {
+			textareaRef.value = '';
+			autoResize();
+		}
+		saveText('');
+		savePrompt('');
+		savePromptVisible(false);
 	}
 
 	effect(() => {
@@ -237,7 +363,7 @@ export component App() {
 					aria-label="Open command menu"
 					title="Command menu (Ctrl+K)"
 				>
-					<CommandLine  />
+					<CommandLine />
 				</button>
 
 				<a
@@ -254,16 +380,120 @@ export component App() {
 		</div>
 
 		<div class="relative w-full max-w-3xl flex-1">
+			if (@showPrompt) {
+				<textarea
+					class="prompt-textarea w-full bg-transparent border-none placeholder:italic outline-none text-zinc-400 text-base placeholder:text-zinc-500 leading-[1.85] resize-none overflow-hidden mb-4"
+					style={{
+						caretColor: 'transparent',
+					}}
+					value={@promptText}
+					onInput={(e: Event) => {
+						@promptText = (e.target as HTMLTextAreaElement).value;
+						savePrompt(@promptText);
+						const target = e.target as HTMLTextAreaElement;
+						target.style.height = 'auto';
+						target.style.height = target.scrollHeight + 'px';
+						@isPromptTyping = true;
+						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
+						promptTypingTimeout = setTimeout(() => {
+							@isPromptTyping = false;
+						}, 600);
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onSelect={() => {
+						@isPromptTyping = true;
+						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
+						promptTypingTimeout = setTimeout(() => {
+							@isPromptTyping = false;
+						}, 600);
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onKeyDown={() => {
+						@isPromptTyping = true;
+						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
+						promptTypingTimeout = setTimeout(() => {
+							@isPromptTyping = false;
+						}, 600);
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onKeyUp={() => {
+						@isPromptTyping = true;
+						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
+						promptTypingTimeout = setTimeout(() => {
+							@isPromptTyping = false;
+						}, 600);
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onClick={(e: MouseEvent) => {
+						e.stopPropagation();
+						@isPromptTyping = true;
+						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
+						promptTypingTimeout = setTimeout(() => {
+							@isPromptTyping = false;
+						}, 600);
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onFocus={() => {
+						@isPromptFocused = true;
+						requestAnimationFrame(measurePromptCaret);
+					}}
+					onBlur={() => {
+						@isPromptFocused = false;
+					}}
+					placeholder="Enter your prompt..."
+					spellcheck={true}
+					{ref (el: HTMLTextAreaElement) => {
+						if (el) {
+							promptTextareaRef = el;
+							el.style.height = 'auto';
+							el.style.height = el.scrollHeight + 'px';
+							requestAnimationFrame(measurePromptCaret);
+							syncLayoutWithFonts();
+						}
+					}}
+				/>
+				<div
+					class="prompt-mirror pointer-events-none absolute top-0 left-0"
+					style={{
+						opacity: '0',
+						position: 'absolute',
+						pointerEvents: 'none',
+					}}
+					aria-hidden="true"
+					{ref (el: HTMLDivElement) => {
+						promptMirrorRef = el;
+					}}
+				/>
+				if (@promptCaretVisible) {
+					<div
+						class={{
+							'caret pointer-events-none absolute top-0 left-0': true,
+							'caret-typing': @isPromptTyping,
+							'caret-idle': !@isPromptTyping,
+						}}
+						style={{
+							transform: `translate(${@promptCaretX}px, ${@promptCaretY}px)`,
+						}}
+					/>
+				}
+			}
 			<textarea
-				class="editor-area w-full bg-transparent border-none outline-none text-zinc-300 text-base leading-[1.85] resize-none overflow-hidden"
+				class="editor-area w-full bg-transparent placeholder:italic placeholder:text-zinc-500 border-none outline-none text-zinc-300 text-base leading-[1.85] resize-none overflow-hidden"
 				{ref (el: HTMLTextAreaElement) => {
 					textareaRef = el;
+					@textareaOffsetTop = el.offsetTop;
 					el.value = @text;
-					el.focus();
+					if (!@hasMounted) {
+						@hasMounted = true;
+						if (!@showPrompt) {
+							el.focus();
+						}
+					}
 					requestAnimationFrame(() => {
 						autoResize();
 						measureCaret();
 					});
+					syncLayoutWithFonts();
 				}}
 				onInput={handleInput}
 				onSelect={handleSelect}
@@ -282,21 +512,25 @@ export component App() {
 			/>
 
 			<div
-				class="mirror-div pointer-events-none absolute top-0 left-0"
-				aria-hidden="true"
+				class="mirror-div pointer-events-none absolute left-0"
+				style={{
+					top: `${@textareaOffsetTop}px`,
+				}}
 				{ref (el: HTMLDivElement) => {
 					mirrorRef = el;
 				}}
+				aria-hidden="true"
 			/>
 
 			if (@caretVisible) {
 				<div
 					class={{
-						'caret pointer-events-none absolute top-0 left-0': true,
+						'caret pointer-events-none absolute left-0': true,
 						'caret-typing': @isTyping,
 						'caret-idle': !@isTyping,
 					}}
 					style={{
+						top: `${@textareaOffsetTop}px`,
 						transform: `translate(${@caretX}px, ${@caretY}px)`,
 					}}
 				/>
@@ -331,14 +565,22 @@ export component App() {
 
 		<CmdKMenu
 			isOpen={@cmdkOpen}
-			onClose={() => (@cmdkOpen = false)}
+			onClose={() => {
+				@cmdkOpen = false;
+				queueMicrotask(() => textareaRef?.focus());
+			}}
 			{@stashes}
 			onStash={handleStash}
 			onStashPop={handleStashPop}
 			onStashRestore={handleStashRestore}
+			onStashDelete={handleStashDelete}
 			onToggleCount={() => (@showWords = !@showWords)}
 			onCopy={handleCopy}
+			onAddPrompt={handleAddPrompt}
+			onRemovePrompt={handleRemovePrompt}
+			onClear={handleClear}
 			{@showWords}
+			{@showPrompt}
 			hasText={@text.trim().length > 0}
 		/>
 	</div>

@@ -10,6 +10,7 @@ This is a **RippleTS** application - a TypeScript-first UI framework. It uses Vi
 - This project uses bun, do not use any other package managers
 - Always use tailwindcss
 - When modifying .ripple files, you must have read the ripple-ts skill at some point in the current conversation
+- Do not run tools calls in thinking
 
 ## Build/Lint/Format Commands
 
