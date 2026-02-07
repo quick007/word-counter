@@ -19,6 +19,7 @@
         "eslint": "^9.0.0",
         "prettier": "^3.6.2",
         "tailwindcss": "^4.1.18",
+        "tailwindcss-motion": "^1.1.1",
         "typescript": "^5.9.2",
         "vite": "^7.1.4",
       },
@@ -526,6 +527,8 @@
     "supports-color": ["supports-color@7.2.0", "", { "dependencies": { "has-flag": "^4.0.0" } }, "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw=="],
 
     "tailwindcss": ["tailwindcss@4.1.18", "", {}, "sha512-4+Z+0yiYyEtUVCScyfHCxOYP06L5Ne+JiHhY2IjR2KWMIWhJOYZKLSGZaP5HkZ8+bY0cxfzwDE5uOmzFXyIwxw=="],
+
+    "tailwindcss-motion": ["tailwindcss-motion@1.1.1", "", { "peerDependencies": { "tailwindcss": ">=3.0.0 || insiders" } }, "sha512-CeeQAc5o31BuEPMyWdq/786X7QWNeifa+8khfu74Fs8lGkgEwjNYv6dGv+lRFS8FWXV5dp7F3AU9JjBXjiaQfw=="],
 
     "tapable": ["tapable@2.3.0", "", {}, "sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg=="],
 

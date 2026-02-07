@@ -11,21 +11,13 @@ const STASHES_KEY = 'wc-stashes';
 const MAX_STASHES = 20;
 
 export function loadStashes(): StashItem[] {
-	try {
-		const stored = localStorage.getItem(STASHES_KEY);
-		if (!stored) return [];
-		return JSON.parse(stored);
-	} catch {
-		return [];
-	}
+	const stored = localStorage.getItem(STASHES_KEY);
+	if (!stored) return [];
+	return JSON.parse(stored);
 }
 
 export function saveStashes(stashes: StashItem[]) {
-	try {
-		localStorage.setItem(STASHES_KEY, JSON.stringify(stashes));
-	} catch {
-		// Storage full or unavailable
-	}
+	localStorage.setItem(STASHES_KEY, JSON.stringify(stashes));
 }
 
 export function createStash(text: string): StashItem {

@@ -9,6 +9,7 @@ This is a **RippleTS** application - a TypeScript-first UI framework. It uses Vi
 - Do not commit unless the user explicitly asks you to make that commit. Asking for one commit does not imply you should make future commits
 - This project uses bun, do not use any other package managers
 - Always use tailwindcss
+- When modifying .ripple files, you must have read the ripple-ts skill at some point in the current conversation
 
 ## Build/Lint/Format Commands
 

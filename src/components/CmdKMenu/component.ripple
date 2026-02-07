@@ -1,7 +1,14 @@
 import { track, effect } from 'ripple';
 import type { StashItem, CommandItem } from './cmdk-utils';
 import { filterCommands, getRelativeTime } from './cmdk-utils';
-import { Pill } from './Pill.ripple';
+import { Pill } from '../ui/Pill.ripple';
+import { MagnifyingGlass } from '../icons/MagnifyingGlass.ripple';
+import { ArchiveBox } from '../icons/ArchiveBox.ripple';
+import { ListBullet } from '../icons/ListBullet.ripple';
+import { ArrowUturnLeft } from '../icons/ArrowUturnLeft.ripple';
+import { ArrowsRightLeft } from '../icons/ArrowsRightLeft.ripple';
+import { ClipboardDocument } from '../icons/ClipboardDocument.ripple';
+import { Document } from '../icons/Document.ripple';
 
 export interface CmdKMenuProps {
 	isOpen: boolean;
@@ -20,8 +27,18 @@ export component CmdKMenu(props: CmdKMenuProps) {
 	let searchQuery = track('');
 	let selectedIndex = track(0);
 	let currentPage = track<'main' | 'stash-list'>('main');
+	let isClosing = track(false);
 	let inputRef: HTMLInputElement | undefined;
 	let listRef: HTMLDivElement | undefined;
+
+	function handleClose() {
+		if (@isClosing) return;
+		@isClosing = true;
+		setTimeout(() => {
+			@props.onClose();
+			@isClosing = false;
+		}, 300);
+	}
 
 	let mainCommands = track<CommandItem[]>(
 		() => [
@@ -33,7 +50,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				action: () => {
 					if (@props.hasText) {
 						@props.onStash();
-						@props.onClose();
+						handleClose();
 					}
 				},
 			},
@@ -45,7 +62,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				action: () => {
 					if (@props.stashes.length > 0) {
 						@props.onStashPop();
-						@props.onClose();
+						handleClose();
 					}
 				},
 			},
@@ -67,7 +84,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				keywords: ['switch', 'count', 'display', 'words', 'characters'],
 				action: () => {
 					@props.onToggleCount();
-					@props.onClose();
+					handleClose();
 				},
 			},
 			{
@@ -79,7 +96,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				action: () => {
 					if (@props.hasText) {
 						@props.onCopy();
-						@props.onClose();
+						handleClose();
 					}
 				},
 			},
@@ -135,7 +152,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				const stash = @filteredStashes[@selectedIndex];
 				if (stash) {
 					@props.onStashRestore(stash);
-					@props.onClose();
+					handleClose();
 				}
 			}
 		} else if (e.key === 'Escape') {
@@ -145,7 +162,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				@selectedIndex = 0;
 				@currentPage = 'main';
 			} else {
-				@props.onClose();
+				handleClose();
 			}
 		} else if (e.key === 'Backspace' && !@searchQuery && @currentPage === 'stash-list') {
 			e.preventDefault();
@@ -163,50 +180,27 @@ export component CmdKMenu(props: CmdKMenuProps) {
 		});
 	}
 
-	function getIconPath(icon: string): string {
-		switch (icon) {
-			case 'archive':
-				return 'M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z M12 13V3';
-			case 'undo':
-				return 'M3 7v6h6M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13';
-			case 'list':
-				return 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01';
-			case 'toggle':
-				return 'M12 3v18M3 12h18';
-			case 'file':
-				return 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6';
-			case 'copy':
-				return 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2 M8 2v4';
-			default:
-				return '';
-		}
-	}
-
 	if (@props.isOpen) {
-		<div
-			class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
-			onClick={(e: MouseEvent) => {
-				if (e.target === e.currentTarget) @props.onClose();
-			}}
-		>
+		<div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
 			<div
-				class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200"
+				class={{
+					'fixed inset-0 bg-black/50 transition-all duration-300 ease-out': true,
+					'opacity-100 backdrop-blur-sm': !@isClosing,
+					'opacity-0 backdrop-blur-none': @isClosing,
+				}}
+				onClick={handleClose}
 			/>
 
 			<div
-				class="relative w-full max-w-lg mx-4 rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)] border border-white/[0.12] bg-linear-to-br from-white/[0.08] via-white/[0.03] to-white/[0.06] backdrop-blur-xs backdrop-saturate-[1.6] animate-in fade-in zoom-in-95 duration-200"
+				class={{
+					'relative w-full max-w-lg mx-4 rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)] border border-white/[0.12] bg-linear-to-br from-white/[0.08] via-white/[0.03] to-white/[0.06] backdrop-blur-xs backdrop-saturate-[1.6]': true,
+					'motion-preset-fade motion-translate-y-in-3 motion-scale-in-98 motion-duration-300': !@isClosing,
+					'motion-opacity-out-0 motion-translate-y-out-2 motion-scale-out-98 motion-duration-300': @isClosing,
+				}}
 				onKeyDown={handleKeyDown}
 			>
 				<div class="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08]">
-					<svg
-						class="w-4 h-4 text-zinc-500"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<circle cx="11" cy="11" r="8" stroke-width="2" />
-						<path d="M21 21l-4.3-4.3" stroke-width="2" stroke-linecap="round" />
-					</svg>
+					<MagnifyingGlass class="size-4 text-zinc-500" />
 					<input
 						{ref (el: HTMLInputElement) => {
 							inputRef = el;
@@ -274,17 +268,17 @@ export component CmdKMenu(props: CmdKMenuProps) {
 										data-selected={i === @selectedIndex}
 										class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-all duration-150"
 									>
-										<svg
-											class="w-4 h-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-											stroke-width="1.5"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										>
-											<path d={getIconPath(cmd.icon)} />
-										</svg>
+										if (cmd.icon === 'archive') {
+											<ArchiveBox class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+										} else if (cmd.icon === 'undo') {
+											<ArrowUturnLeft class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+										} else if (cmd.icon === 'list') {
+											<ListBullet class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+										} else if (cmd.icon === 'toggle') {
+											<ArrowsRightLeft class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+										} else if (cmd.icon === 'copy') {
+											<ClipboardDocument class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+										}
 										<span class="flex-1 text-sm">{cmd.label}</span>
 										if (cmd.shortcut) {
 											<Pill>
@@ -320,7 +314,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 									<button
 										onClick={() => {
 											@props.onStashRestore(stash);
-											@props.onClose();
+											handleClose();
 										}}
 										onMouseEnter={() => {
 											@selectedIndex = i;
@@ -329,17 +323,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 										class="w-full flex flex-col gap-0.5 px-3 py-2.5 rounded-2xl text-left transition-all"
 									>
 										<div class="flex items-center gap-2">
-											<svg
-												class="w-3.5 h-3.5 text-zinc-500"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-												stroke-width="1.5"
-											>
-												<path
-													d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6"
-												/>
-											</svg>
+											<Document class="size-3.5 text-zinc-500" />
 											<span class="flex-1 text-sm text-zinc-300 truncate">
 												{stash.preview}
 											</span>
