@@ -9,6 +9,7 @@ import { ArrowUturnLeft } from '../icons/ArrowUturnLeft.ripple';
 import { ArrowsRightLeft } from '../icons/ArrowsRightLeft.ripple';
 import { ClipboardDocument } from '../icons/ClipboardDocument.ripple';
 import { Document } from '../icons/Document.ripple';
+import { Trash } from '../icons/Trash.ripple';
 
 export interface CmdKMenuProps {
 	isOpen: boolean;
@@ -17,11 +18,15 @@ export interface CmdKMenuProps {
 	onStash: () => void;
 	onStashPop: () => void;
 	onStashRestore: (stash: StashItem) => void;
+	onStashDelete: (id: string) => void;
 	onToggleCount: () => void;
 	onCopy: () => void;
 	showWords: boolean;
 	hasText: boolean;
 }
+
+const ITEM_HEIGHT = 48; // Height of each command item in pixels
+const SECTION_HEADER_HEIGHT = 28; // Height of section header
 
 export component CmdKMenu(props: CmdKMenuProps) {
 	let searchQuery = track('');
@@ -30,6 +35,11 @@ export component CmdKMenu(props: CmdKMenuProps) {
 	let isClosing = track(false);
 	let inputRef: HTMLInputElement | undefined;
 	let listRef: HTMLDivElement | undefined;
+	let highlightRef: HTMLDivElement | undefined;
+
+	let highlightOffset = track(() => {
+		return @selectedIndex * ITEM_HEIGHT + SECTION_HEADER_HEIGHT;
+	});
 
 	function handleClose() {
 		if (@isClosing) return;
@@ -83,8 +93,10 @@ export component CmdKMenu(props: CmdKMenuProps) {
 				icon: 'toggle',
 				keywords: ['switch', 'count', 'display', 'words', 'characters'],
 				action: () => {
-					@props.onToggleCount();
 					handleClose();
+					setTimeout(() => {
+						@props.onToggleCount();
+					}, 50);
 				},
 			},
 			{
@@ -193,13 +205,13 @@ export component CmdKMenu(props: CmdKMenuProps) {
 
 			<div
 				class={{
-					'relative w-full max-w-lg mx-4 rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)] border border-white/[0.12] bg-linear-to-br from-white/[0.08] via-white/[0.03] to-white/[0.06] backdrop-blur-xs backdrop-saturate-[1.6]': true,
+					'relative w-full max-w-lg mx-4 rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)] border border-white/[0.12] bg-linear-to-br from-white/[0.06] via-white/[0.03] to-white/[0.04] backdrop-blur-xs backdrop-saturate-[1.6]': true,
 					'motion-preset-fade motion-translate-y-in-3 motion-scale-in-98 motion-duration-300': !@isClosing,
 					'motion-opacity-out-0 motion-translate-y-out-2 motion-scale-out-98 motion-duration-300': @isClosing,
 				}}
 				onKeyDown={handleKeyDown}
 			>
-				<div class="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08]">
+				<div class="flex items-center gap-3 px-4 h-12 border-b border-white/[0.08]">
 					<MagnifyingGlass class="size-4 text-zinc-500" />
 					<input
 						{ref (el: HTMLInputElement) => {
@@ -239,12 +251,23 @@ export component CmdKMenu(props: CmdKMenuProps) {
 					{ref (el: HTMLDivElement) => {
 						listRef = el;
 					}}
-					class="max-h-xl overflow-y-auto py-2"
+					class="relative max-h-xl overflow-y-auto py-2"
 					style={{
 						scrollbarWidth: 'thin',
 						scrollbarColor: 'rgba(255,255,255,0.1) transparent',
 					}}
 				>
+					if (@currentPage === 'main') {
+						<div
+							{ref (el: HTMLDivElement) => {
+								highlightRef = el;
+							}}
+							class="absolute left-2 right-2 h-12 rounded-xl bg-white/[0.08] pointer-events-none transition-transform duration-100 ease-out z-0"
+							style={{
+								transform: `translateY(${@highlightOffset}px)`,
+							}}
+						/>
+					}
 					if (@currentPage === 'main') {
 						if (@filteredCommands.length === 0) {
 							<div class="px-4 py-8 text-center text-zinc-600 text-sm">
@@ -253,7 +276,7 @@ export component CmdKMenu(props: CmdKMenuProps) {
 						} else {
 							<div class="px-2">
 								<div
-									class="px-2 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider"
+									class="px-2 py-1.5 text-xs font-medium text-zinc-500 tracking-wider"
 								>
 									{'Commands'}
 								</div>
@@ -266,18 +289,28 @@ export component CmdKMenu(props: CmdKMenuProps) {
 											@selectedIndex = i;
 										}}
 										data-selected={i === @selectedIndex}
-										class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-all duration-150"
+										class="relative w-full flex items-center gap-3 px-3 h-12 rounded-xl text-left z-10"
 									>
 										if (cmd.icon === 'archive') {
-											<ArchiveBox class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+											<ArchiveBox
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
 										} else if (cmd.icon === 'undo') {
-											<ArrowUturnLeft class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+											<ArrowUturnLeft
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
 										} else if (cmd.icon === 'list') {
-											<ListBullet class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+											<ListBullet
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
 										} else if (cmd.icon === 'toggle') {
-											<ArrowsRightLeft class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+											<ArrowsRightLeft
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
 										} else if (cmd.icon === 'copy') {
-											<ClipboardDocument class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+											<ClipboardDocument
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
 										}
 										<span class="flex-1 text-sm">{cmd.label}</span>
 										if (cmd.shortcut) {
@@ -306,32 +339,50 @@ export component CmdKMenu(props: CmdKMenuProps) {
 						} else {
 							<div class="px-2">
 								<div
-									class="px-2 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider"
+									class="px-2 py-1.5 text-xs font-medium text-zinc-500 tracking-wider"
 								>
 									{`Stashes (${@filteredStashes.length})`}
 								</div>
 								for (const stash of @filteredStashes; index i; key stash.id) {
-									<button
-										onClick={() => {
-											@props.onStashRestore(stash);
-											handleClose();
-										}}
-										onMouseEnter={() => {
-											@selectedIndex = i;
-										}}
-										data-selected={i === @selectedIndex}
-										class="w-full flex flex-col gap-0.5 px-3 py-2.5 rounded-2xl text-left transition-all"
-									>
-										<div class="flex items-center gap-2">
-											<Document class="size-3.5 text-zinc-500" />
+									<div class="relative group px-2">
+										<div
+											class="absolute inset-y-1 right-2 w-12 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+										>
+											<button
+												onClick={(e: MouseEvent) => {
+													e.stopPropagation();
+													@props.onStashDelete(stash.id);
+												}}
+												class="p-2 text-zinc-500 hover:text-red-500/80 transition-all rounded-xl hover:bg-white/[0.08]"
+												title="Delete stash"
+											>
+												<Trash class="size-4" />
+											</button>
+										</div>
+										<button
+											onClick={() => {
+												@props.onStashRestore(stash);
+												handleClose();
+											}}
+											onMouseEnter={() => {
+												@selectedIndex = i;
+											}}
+											data-selected={i === @selectedIndex}
+											class="relative w-full flex items-center gap-2 px-3 h-12 rounded-xl text-left z-10 group-hover:-translate-x-10 transition-transform"
+										>
+											<Document
+												class="size-3.5 text-zinc-500 flex-shrink-0"
+											/>
 											<span class="flex-1 text-sm text-zinc-300 truncate">
 												{stash.preview}
 											</span>
-											<span class="text-xs text-zinc-500">
+											<span
+												class="text-xs text-zinc-500 tabular-nums transition-opacity group-hover:opacity-0 flex-shrink-0"
+											>
 												{getRelativeTime(stash.timestamp)}
 											</span>
-										</div>
-									</button>
+										</button>
+									</div>
 								}
 							</div>
 						}
