@@ -110,12 +110,40 @@ export component App() {
 		requestAnimationFrame(measureCaret);
 	}
 
-	function handleSelect() {
+	function handleSelect(e?: Event) {
+		// Stop animation and show solid caret when clicking/moving cursor
+		@isTyping = true;
+		if (typingTimeout) clearTimeout(typingTimeout);
+		typingTimeout = setTimeout(() => {
+			@isTyping = false;
+		}, 600);
 		requestAnimationFrame(measureCaret);
 	}
 
-	function focusTextarea() {
-		textareaRef?.focus();
+	function focusTextarea(e?: MouseEvent) {
+		const textarea = textareaRef;
+		if (!textarea) return;
+		
+		// If clicking below the text content, move cursor to end
+		if (e) {
+			const rect = textarea.getBoundingClientRect();
+			const clickY = e.clientY;
+			const textBottom = rect.top + textarea.scrollHeight;
+			
+			if (clickY > textBottom) {
+				// Clicked below the text, move cursor to end
+				const endPos = textarea.value.length;
+				textarea.setSelectionRange(endPos, endPos);
+			}
+		}
+		
+		textarea.focus();
+		@isTyping = true;
+		if (typingTimeout) clearTimeout(typingTimeout);
+		typingTimeout = setTimeout(() => {
+			@isTyping = false;
+		}, 600);
+		requestAnimationFrame(measureCaret);
 	}
 
 	<div
