@@ -43,7 +43,8 @@ export component App() {
 	let isTyping = track(false);
 	let isFocused = track(false);
 	let isPromptFocused = track(false);
-	let hasSelection = track(false);
+	let mainHasSelection = track(false);
+	let promptHasSelection = track(false);
 	let isPromptTyping = track(false);
 	let caretX = track(0);
 	let caretY = track(0);
@@ -67,20 +68,29 @@ export component App() {
 
 	let charCount = track(() => (@text).length);
 
-	let caretVisible = track(() => @isFocused && !@hasSelection && !@isPromptFocused);
-	let promptCaretVisible = track(() => @isPromptFocused && !@hasSelection);
+	let caretVisible = track(() => @isFocused && !@mainHasSelection && !@isPromptFocused);
+	let promptCaretVisible = track(() => @isPromptFocused && !@promptHasSelection);
 
 	let textareaRef: HTMLTextAreaElement | undefined;
 	let mirrorRef: HTMLDivElement | undefined;
 	let typingTimeout: ReturnType<typeof setTimeout> | undefined;
 	let promptTypingTimeout: ReturnType<typeof setTimeout> | undefined;
 	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+	let mainCaretFrame: number | undefined;
+	let promptCaretFrame: number | undefined;
 
 	function autoResize() {
 		const textarea = textareaRef;
 		if (!textarea) return;
 		textarea.style.height = 'auto';
 		textarea.style.height = textarea.scrollHeight + 'px';
+		syncTextareaOffset();
+	}
+
+	function syncTextareaOffset() {
+		const textarea = textareaRef;
+		if (!textarea) return;
+		@textareaOffsetTop = textarea.offsetTop;
 	}
 
 	function syncLayoutWithFonts() {
@@ -89,8 +99,8 @@ export component App() {
 		const fonts = document.fonts;
 		if (!fonts) {
 			autoResize();
-			measureCaret();
-			measurePromptCaret();
+			scheduleMainCaretSync();
+			schedulePromptCaretSync();
 			return;
 		}
 		fonts.ready.then(() => {
@@ -99,91 +109,99 @@ export component App() {
 				promptTextareaRef.style.height = 'auto';
 				promptTextareaRef.style.height = promptTextareaRef.scrollHeight + 'px';
 			}
-			requestAnimationFrame(() => {
-				measureCaret();
-				measurePromptCaret();
-			});
+			scheduleMainCaretSync();
+			schedulePromptCaretSync();
 		});
 	}
 
-	function measureCaret() {
+	function computeCaretPosition(textarea: HTMLTextAreaElement, mirror: HTMLDivElement) {
+		const start = textarea.selectionStart ?? 0;
+		const end = textarea.selectionEnd ?? 0;
+		const hasSelection = start !== end;
+		if (hasSelection) {
+			return { hasSelection, x: 0, y: 0 };
+		}
+
+		const textBefore = textarea.value.substring(0, start);
+		const style = window.getComputedStyle(textarea);
+		mirror.style.font = style.font;
+		mirror.style.letterSpacing = style.letterSpacing;
+		mirror.style.wordSpacing = style.wordSpacing;
+		mirror.style.lineHeight = style.lineHeight;
+		mirror.style.padding = style.padding;
+		mirror.style.border = style.border;
+		mirror.style.boxSizing = style.boxSizing;
+		mirror.style.width = style.width;
+		mirror.style.textTransform = style.textTransform;
+		mirror.style.textIndent = style.textIndent;
+		mirror.style.tabSize = style.tabSize;
+		mirror.style.whiteSpace = 'pre-wrap';
+		mirror.style.wordBreak = 'break-word';
+		mirror.style.overflowWrap = 'break-word';
+
+		mirror.innerHTML = '';
+		const textNode = document.createTextNode(textBefore);
+		const marker = document.createElement('span');
+		marker.textContent = '​';
+		marker.style.display = 'inline-block';
+		mirror.appendChild(textNode);
+		mirror.appendChild(marker);
+
+		const markerRect = marker.getBoundingClientRect();
+		const textareaRect = textarea.getBoundingClientRect();
+		const lineHeight = parseFloat(style.lineHeight);
+		const fontSize = parseFloat(style.fontSize);
+		const offsetY =
+			Number.isFinite(lineHeight) && Number.isFinite(fontSize)
+				? Math.max(0, (lineHeight - fontSize) * 0.3)
+				: 0;
+
+		return {
+			hasSelection,
+			x: markerRect.left - textareaRect.left,
+			y: markerRect.top - textareaRect.top + offsetY,
+		};
+	}
+
+	function syncMainCaret() {
 		const textarea = textareaRef;
 		const mirror = mirrorRef;
 		if (!textarea || !mirror) return;
-
-		const start = textarea.selectionStart ?? 0;
-		const end = textarea.selectionEnd ?? 0;
-		@hasSelection = start !== end;
-
-		if (start !== end) return;
-
-		const textBefore = textarea.value.substring(0, start);
-
-		const style = window.getComputedStyle(textarea);
-		mirror.style.font = style.font;
-		mirror.style.letterSpacing = style.letterSpacing;
-		mirror.style.wordSpacing = style.wordSpacing;
-		mirror.style.lineHeight = style.lineHeight;
-		mirror.style.paddingLeft = style.paddingLeft;
-		mirror.style.paddingRight = style.paddingRight;
-		mirror.style.paddingTop = style.paddingTop;
-		mirror.style.width = style.width;
-		mirror.style.whiteSpace = 'pre-wrap';
-		mirror.style.wordWrap = 'break-word';
-		mirror.style.overflowWrap = 'break-word';
-
-		mirror.innerHTML = '';
-		const textNode = document.createTextNode(textBefore);
-		const marker = document.createElement('span');
-		marker.textContent = '​';
-		mirror.appendChild(textNode);
-		mirror.appendChild(marker);
-
-		const markerRect = marker.getBoundingClientRect();
-		const textareaRect = textarea.getBoundingClientRect();
-
-		@caretX = markerRect.left - textareaRect.left;
-		@caretY = markerRect.top - textareaRect.top;
+		const result = computeCaretPosition(textarea, mirror);
+		@mainHasSelection = result.hasSelection;
+		if (!result.hasSelection) {
+			@caretX = result.x;
+			@caretY = result.y;
+		}
 	}
 
-	function measurePromptCaret() {
+	function syncPromptCaret() {
 		const textarea = promptTextareaRef;
 		const mirror = promptMirrorRef;
 		if (!textarea || !mirror) return;
+		const result = computeCaretPosition(textarea, mirror);
+		@promptHasSelection = result.hasSelection;
+		if (!result.hasSelection) {
+			@promptCaretX = result.x;
+			@promptCaretY = result.y;
+		}
+	}
 
-		const start = textarea.selectionStart ?? 0;
-		const end = textarea.selectionEnd ?? 0;
-		@hasSelection = start !== end;
+	function scheduleMainCaretSync() {
+		if (mainCaretFrame) cancelAnimationFrame(mainCaretFrame);
+		mainCaretFrame = requestAnimationFrame(() => {
+			syncTextareaOffset();
+			syncMainCaret();
+			mainCaretFrame = undefined;
+		});
+	}
 
-		if (start !== end) return;
-
-		const textBefore = textarea.value.substring(0, start);
-
-		const style = window.getComputedStyle(textarea);
-		mirror.style.font = style.font;
-		mirror.style.letterSpacing = style.letterSpacing;
-		mirror.style.wordSpacing = style.wordSpacing;
-		mirror.style.lineHeight = style.lineHeight;
-		mirror.style.paddingLeft = style.paddingLeft;
-		mirror.style.paddingRight = style.paddingRight;
-		mirror.style.paddingTop = style.paddingTop;
-		mirror.style.width = style.width;
-		mirror.style.whiteSpace = 'pre-wrap';
-		mirror.style.wordWrap = 'break-word';
-		mirror.style.overflowWrap = 'break-word';
-
-		mirror.innerHTML = '';
-		const textNode = document.createTextNode(textBefore);
-		const marker = document.createElement('span');
-		marker.textContent = '​';
-		mirror.appendChild(textNode);
-		mirror.appendChild(marker);
-
-		const markerRect = marker.getBoundingClientRect();
-		const textareaRect = textarea.getBoundingClientRect();
-
-		@promptCaretX = markerRect.left - textareaRect.left;
-		@promptCaretY = markerRect.top - textareaRect.top;
+	function schedulePromptCaretSync() {
+		if (promptCaretFrame) cancelAnimationFrame(promptCaretFrame);
+		promptCaretFrame = requestAnimationFrame(() => {
+			syncPromptCaret();
+			promptCaretFrame = undefined;
+		});
 	}
 
 	function handleInput(e: Event) {
@@ -200,7 +218,7 @@ export component App() {
 		}, 600);
 
 		autoResize();
-		requestAnimationFrame(measureCaret);
+		scheduleMainCaretSync();
 	}
 
 	function handleSelect(e?: Event) {
@@ -209,7 +227,7 @@ export component App() {
 		typingTimeout = setTimeout(() => {
 			@isTyping = false;
 		}, 600);
-		requestAnimationFrame(measureCaret);
+		scheduleMainCaretSync();
 	}
 
 	function focusTextarea(e?: MouseEvent) {
@@ -234,11 +252,11 @@ export component App() {
 		typingTimeout = setTimeout(() => {
 			@isTyping = false;
 		}, 600);
-		requestAnimationFrame(measureCaret);
+		scheduleMainCaretSync();
 	}
 
 	function scrollCaretIntoView() {
-		if (!@isFocused || @hasSelection) return;
+		if (!@isFocused || @mainHasSelection) return;
 
 		requestAnimationFrame(() => {
 			const caret = document.querySelector('.caret');
@@ -337,10 +355,25 @@ export component App() {
 
 	effect(() => {
 		// Watch caret position and focus state to trigger scroll
-		if (@isFocused && !@hasSelection) {
+		if (@isFocused && !@mainHasSelection) {
 			const y = @caretY;
 			scrollCaretIntoView();
 		}
+	});
+
+	effect(() => {
+		const handleResize = () => scheduleMainCaretSync();
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	});
+
+	effect(() => {
+		const isVisible = @showPrompt;
+		requestAnimationFrame(() => {
+			syncTextareaOffset();
+			scheduleMainCaretSync();
+			schedulePromptCaretSync();
+		});
 	});
 
 	<div
@@ -393,12 +426,14 @@ export component App() {
 						const target = e.target as HTMLTextAreaElement;
 						target.style.height = 'auto';
 						target.style.height = target.scrollHeight + 'px';
+						syncTextareaOffset();
 						@isPromptTyping = true;
 						if (promptTypingTimeout) clearTimeout(promptTypingTimeout);
 						promptTypingTimeout = setTimeout(() => {
 							@isPromptTyping = false;
 						}, 600);
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
+						scheduleMainCaretSync();
 					}}
 					onSelect={() => {
 						@isPromptTyping = true;
@@ -406,7 +441,7 @@ export component App() {
 						promptTypingTimeout = setTimeout(() => {
 							@isPromptTyping = false;
 						}, 600);
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
 					}}
 					onKeyDown={() => {
 						@isPromptTyping = true;
@@ -414,7 +449,7 @@ export component App() {
 						promptTypingTimeout = setTimeout(() => {
 							@isPromptTyping = false;
 						}, 600);
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
 					}}
 					onKeyUp={() => {
 						@isPromptTyping = true;
@@ -422,7 +457,7 @@ export component App() {
 						promptTypingTimeout = setTimeout(() => {
 							@isPromptTyping = false;
 						}, 600);
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
 					}}
 					onClick={(e: MouseEvent) => {
 						e.stopPropagation();
@@ -431,11 +466,11 @@ export component App() {
 						promptTypingTimeout = setTimeout(() => {
 							@isPromptTyping = false;
 						}, 600);
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
 					}}
 					onFocus={() => {
 						@isPromptFocused = true;
-						requestAnimationFrame(measurePromptCaret);
+						schedulePromptCaretSync();
 					}}
 					onBlur={() => {
 						@isPromptFocused = false;
@@ -443,15 +478,15 @@ export component App() {
 					placeholder="Enter your prompt..."
 					spellcheck={true}
 					{ref (el: HTMLTextAreaElement) => {
-						if (el) {
-							promptTextareaRef = el;
-							el.style.height = 'auto';
-							el.style.height = el.scrollHeight + 'px';
-							requestAnimationFrame(measurePromptCaret);
-							syncLayoutWithFonts();
-						}
-					}}
-				/>
+					if (el) {
+						promptTextareaRef = el;
+						el.style.height = 'auto';
+						el.style.height = el.scrollHeight + 'px';
+						schedulePromptCaretSync();
+						syncLayoutWithFonts();
+					}
+				}}
+			/>
 				<div
 					class="prompt-mirror pointer-events-none absolute top-0 left-0"
 					style={{
@@ -480,21 +515,21 @@ export component App() {
 			<textarea
 				class="editor-area w-full bg-transparent placeholder:italic placeholder:text-zinc-500 border-none outline-none text-zinc-300 text-base leading-[1.85] resize-none overflow-hidden"
 				{ref (el: HTMLTextAreaElement) => {
-					textareaRef = el;
-					@textareaOffsetTop = el.offsetTop;
-					el.value = @text;
+				textareaRef = el;
+				@textareaOffsetTop = el.offsetTop;
+				el.value = @text;
 					if (!@hasMounted) {
 						@hasMounted = true;
 						if (!@showPrompt) {
 							el.focus();
 						}
 					}
-					requestAnimationFrame(() => {
-						autoResize();
-						measureCaret();
-					});
-					syncLayoutWithFonts();
-				}}
+				requestAnimationFrame(() => {
+					autoResize();
+					scheduleMainCaretSync();
+				});
+				syncLayoutWithFonts();
+			}}
 				onInput={handleInput}
 				onSelect={handleSelect}
 				onClick={handleSelect}
@@ -502,7 +537,7 @@ export component App() {
 				onKeyUp={handleSelect}
 				onFocus={() => {
 					@isFocused = true;
-					requestAnimationFrame(measureCaret);
+					scheduleMainCaretSync();
 				}}
 				onBlur={() => {
 					@isFocused = false;
