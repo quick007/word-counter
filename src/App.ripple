@@ -1,8 +1,31 @@
 import { track } from 'ripple';
 
+const STORAGE_KEY = 'wc-text';
+
+function loadText(): string {
+	try {
+		return localStorage.getItem(STORAGE_KEY) ?? '';
+	} catch {
+		return '';
+	}
+}
+
+function saveText(value: string) {
+	try {
+		localStorage.setItem(STORAGE_KEY, value);
+	} catch {
+		// storage full or unavailable
+	}
+}
+
 export component App() {
-	let text = track('');
+	let text = track(loadText());
 	let showWords = track(true);
+	let isTyping = track(false);
+	let isFocused = track(false);
+	let hasSelection = track(false);
+	let caretX = track(0);
+	let caretY = track(0);
 
 	let wordCount = track(() => {
 		const trimmed = (@text).trim();
@@ -12,11 +35,83 @@ export component App() {
 
 	let charCount = track(() => (@text).length);
 
+	let caretVisible = track(() => @isFocused && !@hasSelection);
+
 	let textareaRef: HTMLTextAreaElement | undefined;
+	let mirrorRef: HTMLDivElement | undefined;
+	let typingTimeout: ReturnType<typeof setTimeout> | undefined;
+	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+
+	function autoResize() {
+		const textarea = textareaRef;
+		if (!textarea) return;
+		textarea.style.height = 'auto';
+		textarea.style.height = textarea.scrollHeight + 'px';
+	}
+
+	function measureCaret() {
+		const textarea = textareaRef;
+		const mirror = mirrorRef;
+		if (!textarea || !mirror) return;
+
+		// Check for selection
+		const start = textarea.selectionStart ?? 0;
+		const end = textarea.selectionEnd ?? 0;
+		@hasSelection = start !== end;
+
+		if (start !== end) return;
+
+		const textBefore = textarea.value.substring(0, start);
+
+		// Mirror the textarea's styling exactly
+		const style = window.getComputedStyle(textarea);
+		mirror.style.font = style.font;
+		mirror.style.letterSpacing = style.letterSpacing;
+		mirror.style.wordSpacing = style.wordSpacing;
+		mirror.style.lineHeight = style.lineHeight;
+		mirror.style.paddingLeft = style.paddingLeft;
+		mirror.style.paddingRight = style.paddingRight;
+		mirror.style.paddingTop = style.paddingTop;
+		mirror.style.width = style.width;
+		mirror.style.whiteSpace = 'pre-wrap';
+		mirror.style.wordWrap = 'break-word';
+		mirror.style.overflowWrap = 'break-word';
+
+		// Put text before cursor + a span marker
+		mirror.innerHTML = '';
+		const textNode = document.createTextNode(textBefore);
+		const marker = document.createElement('span');
+		marker.textContent = '​';
+		mirror.appendChild(textNode);
+		mirror.appendChild(marker);
+
+		const markerRect = marker.getBoundingClientRect();
+		const textareaRect = textarea.getBoundingClientRect();
+
+		@caretX = markerRect.left - textareaRect.left;
+		@caretY = markerRect.top - textareaRect.top;
+	}
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLTextAreaElement;
 		@text = target.value;
+
+		// Persist to localStorage (debounced)
+		if (saveTimeout) clearTimeout(saveTimeout);
+		saveTimeout = setTimeout(() => saveText(@text), 300);
+
+		@isTyping = true;
+		if (typingTimeout) clearTimeout(typingTimeout);
+		typingTimeout = setTimeout(() => {
+			@isTyping = false;
+		}, 600);
+
+		autoResize();
+		requestAnimationFrame(measureCaret);
+	}
+
+	function handleSelect() {
+		requestAnimationFrame(measureCaret);
 	}
 
 	function focusTextarea() {
@@ -24,37 +119,85 @@ export component App() {
 	}
 
 	<div
-		class="min-h-screen flex flex-col items-center bg-zinc-900 pt-12 px-6 pb-8 cursor-text"
+		class="min-h-screen flex flex-col items-center bg-zinc-950 py-4 px-6 cursor-text"
 		onClick={focusTextarea}
 	>
-		<h1 class="text-xs font-medium tracking-widest uppercase text-zinc-600 mb-12 select-none">
-			{'Word Counter'}
-		</h1>
+			<h1
+				class="text-sm font-medium tracking-wider text-zinc-600 select-none pb-2"
+			>
+				{'Simple Word Counter'}
+			</h1>
 
-		<textarea
-			class="flex-1 w-full max-w-2xl bg-transparent border-none outline-none text-zinc-300 text-lg leading-relaxed font-[inherit] resize-none caret-blue-500 placeholder:text-zinc-700"
-			{ref (el: HTMLTextAreaElement) => {
-				textareaRef = el;
-			}}
-			onInput={handleInput}
-			placeholder="Start typing..."
-			spellcheck={true}
-		/>
+		<div class="relative w-full max-w-3xl flex-1">
+			<textarea
+				class="editor-area w-full bg-transparent border-none outline-none text-zinc-300 text-base leading-[1.85] resize-none overflow-hidden"
+				{ref (el: HTMLTextAreaElement) => {
+					textareaRef = el;
+					el.value = @text;
+					el.focus();
+					requestAnimationFrame(() => {
+						autoResize();
+						measureCaret();
+					});
+				}}
+				onInput={handleInput}
+				onSelect={handleSelect}
+				onClick={handleSelect}
+				onKeyDown={handleSelect}
+				onKeyUp={handleSelect}
+				onFocus={() => {
+					@isFocused = true;
+					requestAnimationFrame(measureCaret);
+				}}
+				onBlur={() => {
+					@isFocused = false;
+				}}
+				placeholder="Start typing..."
+				spellcheck={true}
+			/>
 
-		<button
-			class="fixed bottom-8 bg-transparent border-none cursor-pointer px-4 py-2 text-zinc-600 text-sm font-[inherit] transition-colors duration-200 hover:text-zinc-500 select-none"
-			onClick={(e: MouseEvent) => {
-				e.stopPropagation();
-				@showWords = !@showWords;
-			}}
-		>
-			if (@showWords) {
-				<span class="text-blue-500 tabular-nums">{@wordCount}</span>
-				<span>{@wordCount === 1 ? ' word' : ' words'}</span>
-			} else {
-				<span class="text-blue-500 tabular-nums">{@charCount}</span>
-				<span>{@charCount === 1 ? ' character' : ' characters'}</span>
+			<div
+				class="mirror-div pointer-events-none absolute top-0 left-0"
+				aria-hidden="true"
+				{ref (el: HTMLDivElement) => {
+					mirrorRef = el;
+				}}
+			/>
+
+			if (@caretVisible) {
+				<div
+					class={{
+						'caret pointer-events-none absolute top-0 left-0': true,
+						'caret-typing': @isTyping,
+						'caret-idle': !@isTyping,
+					}}
+					style={{
+						transform: `translate(${@caretX}px, ${@caretY}px)`,
+					}}
+				/>
 			}
-		</button>
+		</div>
+
+		<div class="flex justify-center mt-6 fixed bottom-4">
+			<button
+				class="cursor-pointer px-4 py-1.5 text-[0.95rem] font-medium select-none transition-all duration-300 rounded-full bg-linear-to-br from-white/[0.06] via-white/[0.02] to-white/[0.05] border border-white/[0.08] backdrop-blur-xl backdrop-saturate-[1.4] shadow-[0_0_0_0.5px_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.25)] inset-shadow-[0_1px_0_rgba(255,255,255,0.06)] hover:from-white/[0.09] hover:via-white/[0.04] hover:to-white/[0.07] hover:border-white/[0.12] hover:shadow-[0_0_0_0.5px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)]"
+				onClick={(e: MouseEvent) => {
+					e.stopPropagation();
+					@showWords = !@showWords;
+				}}
+			>
+				if (@showWords) {
+					<span class="text-blue-400/80 tabular-nums font-mono text-[0.95rem]">
+						{@wordCount}
+					</span>
+					<span class="text-zinc-400">{@wordCount === 1 ? ' word' : ' words'}</span>
+				} else {
+					<span class="text-blue-400/80 tabular-nums font-mono text-[0.95rem]">
+						{@charCount}
+					</span>
+					<span class="text-zinc-400">{@charCount === 1 ? ' character' : ' characters'}</span>
+				}
+			</button>
+		</div>
 	</div>
 }

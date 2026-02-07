@@ -16,24 +16,24 @@ This skill helps you work with RippleTS, a TypeScript UI framework that combines
 ## Key Concepts for LLMs
 
 ### File Extension
+
 RippleTS uses `.ripple` files with TypeScript-first JSX-like syntax.
 
 ### Component Definition
+
 Components use the `component` keyword, NOT functions returning JSX:
 
 ```ripple
-component Button(props: { text: string, onClick: () => void }) {
-  <button onClick={props.onClick}>
-    {props.text}
-  </button>
+component Button(props: { text: string; onClick: () => void }) {
+	<button onClick={props.onClick}>{props.text}</button>
 }
 ```
 
 ### CRITICAL RULES
 
 1. **Text Must Be in Expressions**: Unlike HTML/JSX, raw text is NOT allowed. Always wrap text in curly braces:
-   - ❌ `<div>Hello</div>`
-   - ✅ `<div>{"Hello"}</div>`
+    - ❌ `<div>Hello</div>`
+    - ✅ `<div>{"Hello"}</div>`
 
 2. **Templates Only Inside Components**: JSX-like elements can ONLY exist inside `component` function bodies, not in regular functions or variables.
 
@@ -45,18 +45,22 @@ Use `track()` to create reactive values and `@` to access them:
 import { track } from 'ripple';
 
 export component Counter() {
-  let count = track(0);
-  
-  <div>
-    <p>{"Count: "}{@count}</p>
-    <button onClick={() => @count++}>{"Increment"}</button>
-  </div>
+	let count = track(0);
+
+	<div>
+		<p>
+			{'Count: '}
+			{@count}
+		</p>
+		<button onClick={() => @count++}>{'Increment'}</button>
+	</div>
 }
 ```
 
 ### Reactive Collections
 
 Use special syntax for fully reactive collections:
+
 - Arrays: `#[1, 2, 3]` or `new TrackedArray(1, 2, 3)`
 - Objects: `#{a: 1, b: 2}` or `new TrackedObject({a: 1})`
 
@@ -66,17 +70,17 @@ Templates support inline control flow:
 
 ```ripple
 component App(props: { items: string[] }) {
-  <div>
-    if (props.items.length > 0) {
-      <ul>
-        for (const item of props.items; index i) {
-          <li>{item}</li>
-        }
-      </ul>
-    } else {
-      <p>{"No items"}</p>
-    }
-  </div>
+	<div>
+		if (props.items.length > 0) {
+			<ul>
+				for (const item of props.items; index i) {
+					<li>{item}</li>
+				}
+			</ul>
+		} else {
+			<p>{'No items'}</p>
+		}
+	</div>
 }
 ```
 
@@ -86,15 +90,15 @@ Add `<style>` elements directly in components for scoped styles:
 
 ```ripple
 component StyledComponent() {
-  <div class="container">
-    <h1>{"Styled Content"}</h1>
-  </div>
-  <style>
-    .container {
-      background: blue;
-      padding: 1rem;
-    }
-  </style>
+	<div class="container">
+		<h1>{'Styled Content'}</h1>
+	</div>
+	<style>
+		.container {
+			background: blue;
+			padding: 1rem;
+		}
+	</style>
 }
 ```
 
@@ -104,7 +108,7 @@ Use object/array syntax for conditional classes (powered by clsx):
 
 ```ripple
 let includeBaz = track(true);
-<div class={{ foo: true, bar: false, baz: @includeBaz }}></div>
+<div class={{ foo: true, bar: false, baz: @includeBaz }} />
 ```
 
 ## Installation & Setup
