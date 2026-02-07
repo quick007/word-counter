@@ -28,10 +28,11 @@
     </text>
   </g>
   
-  <!-- Bottom stats preview - moved up for less padding -->
+  <!-- Bottom stats preview -->
   <g transform="translate(100, 380)">
     <rect x="0" y="0" width="140" height="44" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" stroke-width="1" rx="22"/>
-    <text x="22" y="30" font-family="ui-monospace, monospace" font-size="16" font-weight="500" fill="#60a5fa">1,234</text>
-    <text x="78" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#a1a1aa">words</text>
+    <!-- Vertically centered text: 44px height / 2 = 22, plus slight offset for baseline -->
+    <text x="22" y="28" font-family="ui-monospace, monospace" font-size="16" font-weight="500" fill="#60a5fa">1,234</text>
+    <text x="78" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#a1a1aa">words</text>
   </g>
 </svg>
