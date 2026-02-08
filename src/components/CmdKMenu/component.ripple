@@ -1,0 +1,474 @@
+import { track, effect } from 'ripple';
+import type { StashItem, CommandItem } from './cmdk-utils';
+import { filterCommands, getRelativeTime } from './cmdk-utils';
+import { Pill } from '../ui/Pill.ripple';
+import { MagnifyingGlass } from '../icons/MagnifyingGlass.ripple';
+import { ArchiveBox } from '../icons/ArchiveBox.ripple';
+import { ListBullet } from '../icons/ListBullet.ripple';
+import { ArrowUturnLeft } from '../icons/ArrowUturnLeft.ripple';
+import { ArrowsRightLeft } from '../icons/ArrowsRightLeft.ripple';
+import { ClipboardDocument } from '../icons/ClipboardDocument.ripple';
+import { Document } from '../icons/Document.ripple';
+import { Trash } from '../icons/Trash.ripple';
+import { CommandLine } from '../icons/CommandLine.ripple';
+
+export interface CmdKMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  stashes: StashItem[];
+  onStash: () => void;
+  onStashPop: () => void;
+  onStashRestore: (stash: StashItem) => void;
+  onStashDelete: (id: string) => void;
+  onToggleCount: () => void;
+  onCopy: () => void;
+  onAddPrompt: () => void;
+  onRemovePrompt: () => void;
+  onClear: () => void;
+  showWords: boolean;
+  hasText: boolean;
+  showPrompt: boolean;
+}
+
+const ITEM_HEIGHT = 48; // Height of each command item in pixels
+const SECTION_HEADER_HEIGHT = 28; // Height of section header
+
+export component CmdKMenu(props: CmdKMenuProps) {
+	let searchQuery = track('');
+	let selectedIndex = track(0);
+	let currentPage = track<'main' | 'stash-list'>('main');
+	let isClosing = track(false);
+	let inputRef: HTMLInputElement | undefined;
+	let listRef: HTMLDivElement | undefined;
+	let highlightRef: HTMLDivElement | undefined;
+
+	let highlightOffset = track(() => {
+		return @selectedIndex * ITEM_HEIGHT + SECTION_HEADER_HEIGHT;
+	});
+
+	function handleClose() {
+		if (@isClosing) return;
+		@isClosing = true;
+		setTimeout(() => {
+			@props.onClose();
+			@isClosing = false;
+		}, 300);
+	}
+
+let mainCommands = track<CommandItem[]>(
+	() => {
+		const commands: CommandItem[] = [
+			{
+				id: 'stash',
+				label: 'Stash text',
+				icon: 'archive',
+				keywords: ['save', 'store', 'backup'],
+				action: () => {
+					if (@props.hasText) {
+						@props.onStash();
+						handleClose();
+					}
+				},
+			},
+			{
+				id: 'pop',
+				label: 'Stash pop',
+				icon: 'undo',
+				keywords: ['restore', 'latest', 'recent', 'back'],
+				action: () => {
+					if (@props.stashes.length > 0) {
+						@props.onStashPop();
+						handleClose();
+					}
+				},
+			},
+			{
+				id: 'list',
+				label: 'Stash list',
+				icon: 'list',
+				keywords: ['view', 'all', 'history', 'see'],
+				action: () => {
+					@searchQuery = '';
+					@selectedIndex = 0;
+					@currentPage = 'stash-list';
+				},
+			},
+			{
+				id: 'toggle',
+				label: @props.showWords ? 'Show character count' : 'Show word count',
+				icon: 'toggle',
+				keywords: ['switch', 'count', 'display', 'words', 'characters'],
+				action: () => {
+					handleClose();
+					setTimeout(() => {
+						@props.onToggleCount();
+					}, 50);
+				},
+			},
+      {
+        id: 'copy',
+        label: 'Copy all content',
+        icon: 'copy',
+        keywords: ['copy', 'clipboard', 'all', 'text'],
+        shortcut: 'Ctrl+Shift+C',
+        action: () => {
+          if (@props.hasText) {
+            @props.onCopy();
+            handleClose();
+          }
+        },
+      },
+      {
+        id: 'clear',
+        label: 'Clear text',
+        icon: 'trash',
+        keywords: ['clear', 'delete', 'empty', 'remove', 'reset'],
+        action: () => {
+          if (@props.hasText) {
+            @props.onClear();
+            handleClose();
+          }
+        },
+      },
+    ];
+
+		if (@props.showPrompt) {
+			commands.push({
+				id: 'remove-prompt',
+				label: 'Remove prompt',
+				icon: 'prompt',
+				keywords: ['prompt', 'remove', 'hide', 'close'],
+				action: () => {
+					@props.onRemovePrompt();
+					handleClose();
+				},
+			});
+		} else {
+			commands.push({
+				id: 'prompt',
+				label: 'Add a prompt',
+				icon: 'prompt',
+				keywords: ['prompt', 'add', 'textarea', 'input'],
+				action: () => {
+					@props.onAddPrompt();
+					handleClose();
+				},
+			});
+		}
+
+		return commands;
+	},
+);
+
+	let filteredCommands = track(() => {
+		if (@currentPage !== 'main') return [];
+		return filterCommands(@mainCommands, @searchQuery);
+	});
+
+	let filteredStashes = track(() => {
+		if (@currentPage !== 'stash-list') return @props.stashes;
+		if (!@searchQuery.trim()) return @props.stashes;
+		const query = @searchQuery.toLowerCase();
+		return @props.stashes.filter(
+			(s) => s.preview.toLowerCase().includes(query) ||
+				getRelativeTime(s.timestamp).includes(query),
+		);
+	});
+
+	let itemsCount = track(() => {
+		if (@currentPage === 'main') return @filteredCommands.length;
+		return @filteredStashes.length;
+	});
+
+	effect(() => {
+		if (@props.isOpen) {
+			@searchQuery = '';
+			@selectedIndex = 0;
+			@currentPage = 'main';
+			queueMicrotask(() => inputRef?.focus());
+		}
+	});
+
+	function handleKeyDown(e: KeyboardEvent) {
+		const count = @itemsCount;
+
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			@selectedIndex = (@selectedIndex + 1) % count;
+			scrollToSelected();
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			@selectedIndex = (@selectedIndex - 1 + count) % count;
+			scrollToSelected();
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			if (@currentPage === 'main') {
+				const cmd = @filteredCommands[@selectedIndex];
+				if (cmd) cmd.action();
+			} else {
+				const stash = @filteredStashes[@selectedIndex];
+				if (stash) {
+					@props.onStashRestore(stash);
+					handleClose();
+				}
+			}
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			if (@currentPage === 'stash-list') {
+				@searchQuery = '';
+				@selectedIndex = 0;
+				@currentPage = 'main';
+			} else {
+				handleClose();
+			}
+		} else if (e.key === 'Backspace' && !@searchQuery && @currentPage === 'stash-list') {
+			e.preventDefault();
+			@selectedIndex = 0;
+			@currentPage = 'main';
+		}
+	}
+
+	function scrollToSelected() {
+		queueMicrotask(() => {
+			const selected = listRef?.querySelector('[data-selected="true"]');
+			if (selected) {
+				selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+			}
+		});
+	}
+
+  if (@props.isOpen) {
+    <div class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+		<div
+			class={{
+				'fixed inset-0 bg-black/50 transition-all duration-300 ease-out': true,
+				'opacity-100 backdrop-blur-sm': !@isClosing,
+				'opacity-0 backdrop-blur-none': @isClosing,
+			}}
+			onClick={handleClose}
+		/>
+
+			<div
+				class={{
+					'relative w-full max-w-lg mx-4 rounded-3xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.05)] border border-white/[0.12] bg-linear-to-br from-white/[0.06] via-white/[0.03] to-white/[0.04] backdrop-blur-xs backdrop-saturate-[1.6]': true,
+					'motion-preset-fade motion-translate-y-in-3 motion-scale-in-98 motion-duration-300': !@isClosing,
+					'motion-opacity-out-0 motion-translate-y-out-2 motion-scale-out-98 motion-duration-300': @isClosing,
+				}}
+				onKeyDown={handleKeyDown}
+			>
+				<div class="flex items-center gap-3 px-4 h-12 border-b border-white/[0.08]">
+					<MagnifyingGlass class="size-4 text-zinc-500" />
+					<input
+						{ref (el: HTMLInputElement) => {
+							inputRef = el;
+						}}
+						type="text"
+						value={@searchQuery}
+						onInput={(e: Event) => {
+							@searchQuery = (e.target as HTMLInputElement).value;
+							@selectedIndex = 0;
+						}}
+						placeholder={@currentPage === 'main'
+							? 'Type a command...'
+							: 'Search stashes...'}
+						class="flex-1 bg-transparent text-zinc-200 placeholder-zinc-600 text-sm outline-none"
+						aria-label="Command menu search"
+					/>
+					if (@currentPage === 'stash-list') {
+						<button
+							onClick={(e: MouseEvent) => {
+								e.stopPropagation();
+								@currentPage = 'main';
+								@searchQuery = '';
+								@selectedIndex = 0;
+							}}
+							class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded hover:bg-white/[0.06]"
+						>
+							{'← Back'}
+						</button>
+					}
+					<Pill>
+						<span>{'ESC'}</span>
+					</Pill>
+				</div>
+
+				<div
+					{ref (el: HTMLDivElement) => {
+						listRef = el;
+					}}
+					class="relative max-h-xl overflow-y-auto py-2"
+					style={{
+						scrollbarWidth: 'thin',
+						scrollbarColor: 'rgba(255,255,255,0.1) transparent',
+					}}
+				>
+				if (@currentPage === 'main' && @filteredCommands.length > 0) {
+					<div
+						{ref (el: HTMLDivElement) => {
+							highlightRef = el;
+						}}
+							class="absolute left-2 right-2 h-12 rounded-xl bg-white/[0.08] pointer-events-none transition-transform duration-100 ease-out z-0"
+							style={{
+								transform: `translateY(${@highlightOffset}px)`,
+							}}
+						/>
+					}
+					if (@currentPage === 'main') {
+						if (@filteredCommands.length === 0) {
+							<div class="px-4 py-8 text-center text-zinc-600 text-sm">
+								{'No commands found'}
+							</div>
+						} else {
+							<div class="px-2">
+								<div
+									class="px-2 py-1.5 text-xs font-medium text-zinc-500 tracking-wider"
+								>
+									{'Commands'}
+								</div>
+								for (const cmd of @filteredCommands; index i; key cmd.id) {
+									<button
+										onClick={() => {
+											cmd.action();
+										}}
+										onMouseEnter={() => {
+											@selectedIndex = i;
+										}}
+										data-selected={i === @selectedIndex}
+										class="relative w-full flex items-center gap-3 px-3 h-12 rounded-xl text-left z-10"
+									>
+										if (cmd.icon === 'archive') {
+											<ArchiveBox
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
+										} else if (cmd.icon === 'undo') {
+											<ArrowUturnLeft
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
+										} else if (cmd.icon === 'list') {
+											<ListBullet
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
+										} else if (cmd.icon === 'toggle') {
+											<ArrowsRightLeft
+												class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+											/>
+				} else if (cmd.icon === 'copy') {
+							<ClipboardDocument
+								class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+							/>
+              } else if (cmd.icon === 'prompt') {
+                <CommandLine
+                  class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+                />
+              } else if (cmd.icon === 'trash') {
+                <Trash
+                  class="size-4 text-zinc-500 group-hover:text-zinc-400 transition-colors"
+                />
+              }
+										<span class="flex-1 text-sm">{cmd.label}</span>
+										if (cmd.shortcut) {
+											<Pill>
+												<span>{cmd.shortcut}</span>
+											</Pill>
+										}
+										if (cmd.id === 'stash' && !@props.hasText) {
+											<span class="text-xs text-zinc-600">{'No text'}</span>
+										}
+										if (cmd.id === 'pop' && @props.stashes.length === 0) {
+											<span class="text-xs text-zinc-600">{'Empty'}</span>
+										}
+              if (cmd.id === 'copy' && !@props.hasText) {
+                <span class="text-xs text-zinc-600">{'No text'}</span>
+              }
+              if (cmd.id === 'clear' && !@props.hasText) {
+                <span class="text-xs text-zinc-600">{'No text'}</span>
+              }
+									</button>
+								}
+							</div>
+						}
+					} else {
+						if (@filteredStashes.length === 0) {
+							<div class="px-4 py-8 text-center text-zinc-600 text-sm">
+								{@searchQuery ? 'No stashes found' : 'No stashes yet'}
+							</div>
+						} else {
+							<div class="px-2">
+								<div
+									class="px-2 py-1.5 text-xs font-medium text-zinc-500 tracking-wider"
+								>
+									{`Stashes (${@filteredStashes.length})`}
+								</div>
+								for (const stash of @filteredStashes; index i; key stash.id) {
+									<div class="relative group px-2">
+										<div
+											class="absolute inset-y-1 right-2 w-12 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+										>
+											<button
+												onClick={(e: MouseEvent) => {
+													e.stopPropagation();
+													@props.onStashDelete(stash.id);
+												}}
+												class="p-2 text-zinc-500 hover:text-red-500/80 transition-all rounded-xl hover:bg-white/[0.08]"
+												title="Delete stash"
+											>
+												<Trash class="size-4" />
+											</button>
+										</div>
+										<button
+											onClick={() => {
+												@props.onStashRestore(stash);
+												handleClose();
+											}}
+											onMouseEnter={() => {
+												@selectedIndex = i;
+											}}
+											data-selected={i === @selectedIndex}
+											class="relative w-full flex items-center gap-2 px-3 h-12 rounded-xl text-left z-10 group-hover:-translate-x-10 transition-transform"
+										>
+											<Document
+												class="size-3.5 text-zinc-500 flex-shrink-0"
+											/>
+											<span class="flex-1 text-sm text-zinc-300 truncate">
+												{stash.preview}
+											</span>
+											<span
+												class="text-xs text-zinc-500 tabular-nums transition-opacity group-hover:opacity-0 flex-shrink-0"
+											>
+												{getRelativeTime(stash.timestamp)}
+											</span>
+										</button>
+									</div>
+								}
+							</div>
+						}
+					}
+				</div>
+
+				<div
+					class="px-4 py-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-zinc-600"
+				>
+					<div class="flex items-center gap-3">
+						<span class="flex items-center gap-1">
+							<Pill>
+								<span>{'↑↓'}</span>
+							</Pill>
+							{'to navigate'}
+						</span>
+						<span class="flex items-center gap-1">
+							<Pill>
+								<span>{'↵'}</span>
+							</Pill>
+							{'to select'}
+						</span>
+					</div>
+					if (@currentPage === 'main') {
+						<span>{`${@filteredCommands.length} commands`}</span>
+					} else {
+						<span>{`${@filteredStashes.length} stashes`}</span>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}

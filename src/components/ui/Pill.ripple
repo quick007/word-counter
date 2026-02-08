@@ -1,0 +1,9 @@
+import type { Component } from 'ripple';
+
+export component Pill(props: { children: Component }) {
+	<span
+		class="text-xs text-zinc-500 px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.06] whitespace-nowrap"
+	>
+		<props.children />
+	</span>
+}

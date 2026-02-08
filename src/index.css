@@ -1,8 +1,16 @@
 @import 'tailwindcss';
+@plugin 'tailwindcss-motion';
 
 @theme {
 	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+	button:not(:disabled),
+	[role='button']:not(:disabled) {
+		cursor: pointer;
+	}
 }
 
 /* ── Textarea ── */
@@ -13,7 +21,7 @@ textarea.editor-area {
 }
 
 textarea.editor-area::placeholder {
-	color: var(--color-zinc-800);
+	color: var(--color-zinc-500);
 }
 
 /* ── Custom caret ── */
@@ -24,7 +32,7 @@ textarea.editor-area::placeholder {
 	background-color: var(--color-blue-500);
 	border-radius: 2px;
 	will-change: transform, opacity;
-	transition: transform 50ms cubic-bezier(0.22, 0.68, 0, 1);
+	transition: none;
 	z-index: 10;
 }
 
@@ -37,6 +45,7 @@ textarea.editor-area::placeholder {
 .caret-typing {
 	opacity: 1;
 	animation: none;
+	transition: transform 50ms cubic-bezier(0.22, 0.68, 0, 1);
 }
 
 @keyframes caret-blink {
